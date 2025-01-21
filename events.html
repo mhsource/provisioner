@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Eventos do Stack</title>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: #ffffff;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header, footer {
+      text-align: center;
+      padding: 20px;
+      background: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: #00ffa2;
+    }
+    #event-log {
+      background: #1e1e1e;
+      padding: 1rem;
+      border-radius: 4px;
+      height: 200px;
+      overflow-y: auto;
+      border: 1px solid #444;
+    }
+    #event-log p {
+      margin: 0.5rem 0;
+    }
+    .hidden { display: none; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid #444;
+    }
+    th {
+      background: #333;
+      color: #00ffa2;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: linear-gradient(90deg, #ff4a4a, #ff0000);
+      color: #fff;
+      font-weight: bold;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 3px 8px rgba(255, 0, 0, 0.5);
+    }
+    footer {
+      margin-top: 2rem;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Eventos do Stack "{{ stack_name }}"</h1>
+    <!-- Botão de Rollback -->
+    <!-- <form action="/rollback_stack/{{ stack_name }}" method="POST">
+      <button type="submit">Rollback Stack</button>
+    </form> -->
+
+    <div id="event-log"></div>
+
+    <div id="resources-section" class="hidden">
+      <h2>Recursos Criados</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Logical ID</th>
+            <th>Physical ID</th>
+            <th>Tipo</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="resources-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <script>
+    const stackName = "{{ stack_name }}";
+    const eventLog = document.getElementById("event-log");
+    const resourcesSection = document.getElementById("resources-section");
+    const resourcesTableBody = document.getElementById("resources-table-body");
+
+    // Inicia SSE
+    const eventSource = new EventSource(`/stack_events/${stackName}`);
+
+    // 1) Mensagens comuns (sem "event:")
+    eventSource.onmessage = function(event) {
+      const p = document.createElement("p");
+      p.textContent = event.data;
+      eventLog.appendChild(p);
+      eventLog.scrollTop = eventLog.scrollHeight;
+    };
+
+    // 2) Evento especial "finalResources"
+    eventSource.addEventListener("finalResources", function(e) {
+      const resources = JSON.parse(e.data);
+      resourcesTableBody.innerHTML = "";
+
+      resources.forEach(r => {
+        const tr = document.createElement("tr");
+
+        const tdLogical = document.createElement("td");
+        tdLogical.textContent = r.LogicalResourceId;
+        tr.appendChild(tdLogical);
+
+        const tdPhysical = document.createElement("td");
+        tdPhysical.textContent = r.PhysicalResourceId;
+        tr.appendChild(tdPhysical);
+
+        const tdType = document.createElement("td");
+        tdType.textContent = r.ResourceType;
+        tr.appendChild(tdType);
+
+        const tdStatus = document.createElement("td");
+        tdStatus.textContent = r.ResourceStatus;
+        tr.appendChild(tdStatus);
+
+        resourcesTableBody.appendChild(tr);
+      });
+      resourcesSection.classList.remove("hidden");
+    });
+
+    // 3) Evento "done" - indica que o servidor encerrou o loop
+    eventSource.addEventListener("done", function(e) {
+      console.log("Stack finalizado (ou não existe). Encerrando SSE...");
+      eventSource.close();
+      // Aqui você pode exibir alguma mensagem específica, se quiser
+    });
+
+    // 4) Tratamento de erro SSE
+    eventSource.onerror = function(err) {
+      console.error("Erro no SSE: ", err);
+    };
+  </script>
+</body>
+</html>
